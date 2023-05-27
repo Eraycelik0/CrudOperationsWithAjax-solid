@@ -2,12 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\SignIn;
+use App\Repositories\SignInRepository;
 use Illuminate\Http\Request;
 use Yajra\DataTables\DataTables;
 
 class SignInController extends Controller
 {
+    private $signInRepository;
+
+    public function __construct(SignInRepository $signInRepository)
+    {
+        $this->signInRepository = $signInRepository;
+    }
+
     public function index()
     {
         return view('panel.login.index');
@@ -15,12 +22,12 @@ class SignInController extends Controller
 
     public function fetch()
     {
-        $veri1 = \request()->veri1;
-                                        //datatable tarafından gönderilen harici veriler
-        $veri2 = \request()->veri2;
+        $signIn = $this->signInRepository->getAll();
 
-        $signIn = SignIn::all();
         return DataTables::of($signIn)
+            ->editColumn('image', function ($data) {
+                return "<img width='100' src='$data->image'/>";
+            })
             ->editColumn('name', function ($data) {
                 return $data->name . " " . $data->surname;
             })
@@ -33,110 +40,137 @@ class SignInController extends Controller
             ->addColumn('updatePage', function ($data) {
                 return '<a href="' . route('sign_in.update_view', $data->id) . '" class="btn btn-warning">Güncelle Page</a>';
             })
-            ->rawColumns(['name', 'delete', 'updateModal','updatePage'])
+            ->rawColumns(['image', 'name', 'delete', 'updateModal', 'updatePage'])
             ->make(true);
     }
 
     public function create(Request $request)
     {
-        $request->validate([
-            'name' => 'required',
-            'surname' => 'required',
-            'city' => 'required',
-            'mail' => 'required | email'
-        ]);
-        $sign_in = new SignIn();
-        $sign_in->name = $request->name;
-        $sign_in->surname = $request->surname;
-        $sign_in->city = $request->city;
-        $sign_in->email = $request->mail;
-        $sign_in->save();
+        $data = $this->validateCreateSignIn($request);
+        $data['image'] = null;
+        $data['email'] = $request->mail;
+
+        if ($request->hasFile('image')) {
+            $image = $request->file('image');
+            $imageName = time() . '.' . $image->extension();
+            $image->move(public_path('images'), $imageName);
+            $data['image'] = '/images/' . $imageName;
+        }
+
+        $signIn = $this->signInRepository->create($data);
+
         return response()->json(['Success' => 'success']);
+    }
+
+    public function update(Request $request)
+    {
+        $data = $this->validateUpdateSignIn($request);
+
+        $data['image'] = null;
+        if (!$request->hasFile('image')) {
+            $data['image'] = $request->file('imageUpdate'); // Eski resmi kullan
+        } else {
+            // Yeni resim seçildiyse, eski resmi sil ve yeni resmi kaydet
+            $image = $request->file('image');
+            $imageName = time() . '.' . $image->extension();
+            $image->move(public_path('images'), $imageName);
+            $data['image'] = '/images/' . $imageName;
+
+            // Eski resmi sil
+            if ($request->file('imageUpdate')) {
+                $oldImagePath = public_path($request->file('imageUpdate'));
+                if (file_exists($oldImagePath)) {
+                    unlink($oldImagePath);
+                }
+            }
+        }
+
+        $success = $this->signInRepository->update($request->updateId, $data);
+
+        if ($success) {
+            return response()->json(['Success' => 'success']);
+        }
+
+        return response()->json(['Error' => 'error']);
     }
 
     public function delete(Request $request)
     {
         $request->validate([
-            'id' => 'distinct'
+            'id' => 'distinct',
         ]);
-        SignIn::find($request->id)->delete();
-        return response()->json(['Success' => 'success']);
+
+        $success = $this->signInRepository->delete($request->id);
+
+        if ($success) {
+            return response()->json(['Success' => 'success']);
+        }
+
+        return response()->json(['Error' => 'error']);
     }
 
     public function get(Request $request)
     {
+        $signIn = $this->signInRepository->getById($request->id);
 
-        $signIn = SignIn::where('id', $request->id)->first();
-        return response([
-            'name' => $signIn->name,
-            'surname' => $signIn->surname,
-            'city' => $signIn->city,
-            'mail' => $signIn->email,
-        ]);
+        if ($signIn) {
+            return response([
+                'name' => $signIn->name,
+                'surname' => $signIn->surname,
+                'city' => $signIn->city,
+                'mail' => $signIn->email,
+            ]);
+        }
+
+        return response()->json(['Error' => 'error']);
     }
 
-    public function update(Request $request)
+
+    public function update_view($id)
     {
-        $request->validate([
-            'name' => 'required',
-            'surname' => 'required',
-            'city' => 'required',
-            'mail' => 'required | email',
-            'updateId' => 'distinct',
-        ]);
-        SignIn::where('id', $request->updateId)->update([
-            'name' => $request->name,
-            'surname' => $request->surname,
-            'city' => $request->city,
-            'email' => $request->mail,
-        ]);
-        return response()->json(['Success' => 'success']);
-    }
-
-    public function update_view($id){
-        $signIn = SignIn::find($id);
-        return view('panel.login.update', compact('signIn','id'));
+        $signIn = $this->signInRepository->getById($id);
+        return view('panel.login.update', compact('signIn', 'id'));
     }
 
     public function pdf(Request $request)
     {
         if (!empty($_POST['data'])) {
             $base64Data = explode("application/pdf;base64,", $request->data);
-            $data = base64_decode($base64Data[1]);  //base64 olan kısım alınır
+            $data = base64_decode($base64Data[1]);
             $fileName = $_POST['filename'];
 
-            file_put_contents("uploads/" . $fileName, $data);   // ==> "uploads" path dosyası public altında oluşturulmak zorunda, oto oluşturmuyor.
+            file_put_contents("uploads/" . $fileName, $data);
             return response()->json(['Success' => 'success']);
         } else {
             return response()->json(['Error' => 'error']);
         }
     }
 
-    //başka bir base64 to pdf fonksiyonu
-    /* public function uploadFileFromBlobString($base64string = '', $file_name = 'test', $folder = 'uploads',)
-     {
 
-         $file_path = "";
-         $result = 0;
+    protected function validateCreateSignIn(Request $request)
+    {
+        $rules = [
+            'name' => 'required',
+            'surname' => 'required',
+            'city' => 'required',
+            'mail' => 'required|email',
+            'image' => 'image|mimes:jpeg,png,jpg|max:2048',
+        ];
 
-         // Convert blob (base64 string) back to PDF
-         if (!empty($base64string)) {
+        return $request->validate($rules);
+    }
 
-             // Detects if there is base64 encoding header in the string.
-             // If so, it needs to be removed prior to saving the content to a phisical file.
-             if (strpos($base64string, ',') !== false) {
-                 @list($encode, $base64string) = explode(',', $base64string);
-             }
+    protected function validateUpdateSignIn(Request $request)
+    {
+        $rules = [
+            'nameUpdate' => 'nullable',
+            'surnameUpdate' => 'nullable',
+            'cityUpdate' => 'nullable',
+            'mailUpdate' => 'nullable|email',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+        ];
 
-             $base64data = base64_decode($base64string, true);
-             $file_path  = "{$folder}/{$file_name}";
-
-             // Return the number of bytes saved, or false on failure
-             $result = file_put_contents("{$this->_assets_path}/{$file_path}", $base64data);
-         }
-
-         return $result;
-     }
-    */
+        return $request->validate($rules);
+    }
 
 }

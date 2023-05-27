@@ -8,8 +8,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class SignIn extends Model
 {
-    use HasFactory,SoftDeletes;
-    protected $table = 'sign_in';
-    protected $guarded=['id'];
+    use HasFactory, SoftDeletes;
 
+    protected $table = 'sign_in';
+
+    protected $fillable = [
+        'name', 'surname', 'city', 'email', 'image'
+    ];
 }

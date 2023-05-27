@@ -18,6 +18,9 @@
                             <div class="row mt-3 mb-4">
                                 <div class="form-group mb-4 col-12">
 
+                                    <label class="mb-1" for="image" style="text-decoration: underline;">Resim : </label>
+                                    <input type="file" name="image" id="image" class="form-control" required>
+
                                     <label class="mb-1" for="name" style="text-decoration: underline;">Adınız : </label>
                                     <input type="text" name="name" id="name" class="form-control" required>
 
@@ -59,6 +62,14 @@
                             @csrf
                             <div class="row mt-3 mb-4">
                                 <div class="form-group mb-4 col-12">
+
+
+                                    <img src="" id="oldImage" width="100" height="100"><br>
+                                    <label class="mb-1" for="oldImage" style="text-decoration: underline;">Yüklü Resim</label>
+
+
+                                    <label class="mb-1" for="image" style="text-decoration: underline;">Resim : </label>
+                                    <input type="file" name="image" id="imageUpdate" class="form-control" required>
 
                                     <label class="mb-1" for="name" style="text-decoration: underline;">Adınız : </label>
                                     <input type="text" name="name" id="nameUpdate" class="form-control" required>
@@ -106,6 +117,7 @@
                             <thead>
                             <tr>
                                 <th>ID</th>
+                                <th>Resim</th>
                                 <th>Adı - Soyadı</th>
                                 <th>Mail Adresi</th>
                                 <th>Bulunduğu İl</th>
@@ -117,6 +129,7 @@
                             <tfoot>
                             <tr>
                                 <th>ID</th>
+                                <th>Resim</th>
                                 <th>Adı - Soyadı</th>
                                 <th>Mail Adresi</th>
                                 <th>Bulunduğu İl</th>
@@ -248,6 +261,7 @@
         function updateSignIn(id) {
             var name = $('#nameUpdate');
             var surname = $('#surnameUpdate');
+            var image = $('#imageUpdate');
             var city = $('#cityUpdate');
             var mail = $('#mailUpdate');
             $.ajax({
@@ -257,6 +271,9 @@
                 success: function (data) {
 
                     $('#updateId').val(id);
+                    if(data.image) {
+                        $('#oldImage').attr('src', data.image);
+                    }
                     name.val(data.name);
                     surname.val(data.surname);
                     city.val(data.city);
@@ -433,6 +450,7 @@
 
             columns: [
                 {data: 'id'},
+                {data: 'image'},
                 {data: 'name'},
                 {data: 'email'},
                 {data: 'city'},
